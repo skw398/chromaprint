@@ -1,6 +1,6 @@
 #!/bin/sh
 # Fork-only installed-consumer check. The C++ driver supplies the runtime;
-# this isolates FFT dependencies from the separate runtime proposal (#119).
+# this isolates FFT dependencies from the C++ runtime.
 set -eu
 export LC_ALL=C
 
@@ -17,6 +17,9 @@ esac
 root=$RUNNER_TEMP/chromaprint-pkgconfig-$FFT_LIB
 test_dir=$GITHUB_WORKSPACE/candidate/.github/tests/pkgconfig-fft-dependencies
 mkdir -p "$root"
+case "$FFT_LIB" in
+    avtx|avfft) export LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib" ;;
+esac
 for variant in baseline candidate; do
     for shared in OFF ON; do
         build=$root/$variant-$shared-build
@@ -30,13 +33,19 @@ for variant in baseline candidate; do
             -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
             -DBUILD_SHARED_LIBS="$shared" -DBUILD_TESTS="$tests" -DBUILD_TOOLS=OFF \
             -DCMAKE_DISABLE_FIND_PACKAGE_FFmpeg="$disable_ffmpeg" \
+            -DFFMPEG_ROOT="$FFMPEG_PREFIX" \
             -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_INSTALL_LIBDIR=lib
+        case "$FFT_LIB" in
+            avtx|avfft)
+                grep -F "FFMPEG_LIBAVUTIL_LIBRARIES:FILEPATH=$FFMPEG_PREFIX/lib/libavutil.so" "$build/CMakeCache.txt"
+                grep -F "FFMPEG_LIBAVCODEC_LIBRARIES:FILEPATH=$FFMPEG_PREFIX/lib/libavcodec.so" "$build/CMakeCache.txt" ;;
+        esac
         cmake --build "$build" --parallel 4
         if [ "$variant" = candidate ]; then
             ctest --test-dir "$build" --output-on-failure --no-tests=error
         fi
         cmake --install "$build"
-        export PKG_CONFIG_PATH=$prefix/lib/pkgconfig
+        export PKG_CONFIG_PATH=$prefix/lib/pkgconfig:$FFMPEG_PREFIX/lib/pkgconfig
         test "$(pkg-config --variable=prefix libchromaprint)" = "$prefix"
         pkg-config --validate libchromaprint
         cat "$prefix/lib/pkgconfig/libchromaprint.pc"

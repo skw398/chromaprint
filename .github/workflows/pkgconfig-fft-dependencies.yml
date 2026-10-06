@@ -17,8 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {fft: avtx, runner: ubuntu-24.04, cc: gcc, cxx: g++}
-          - {fft: avfft, runner: ubuntu-24.04, cc: gcc, cxx: g++}
+          - {fft: avtx, runner: ubuntu-24.04, cc: gcc, cxx: g++, ffmpeg_ref: 140fd653aed8cad774f991ba083e2d01e86420c7}
+          - {fft: avfft, runner: ubuntu-24.04, cc: gcc, cxx: g++, ffmpeg_ref: 34277e12e80031c7f89494ba543684bc1dd0be8f}
           - {fft: fftw3, runner: ubuntu-24.04, cc: gcc, cxx: g++}
           - {fft: fftw3f, runner: ubuntu-24.04, cc: gcc, cxx: g++}
           - {fft: kissfft, runner: ubuntu-24.04, cc: gcc, cxx: g++}
@@ -29,6 +29,7 @@ jobs:
       CXX: ${{ matrix.cxx }}
       LC_ALL: C
       XCODE_VERSION: "26.6"
+      FFMPEG_PREFIX: ${{ runner.temp }}/ffmpeg-${{ matrix.fft }}
     steps:
       - name: Check out candidate and regression test
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -42,12 +43,25 @@ jobs:
           ref: aed8eba2202dd9d7b3b0a56c77904cc805490d72
           path: baseline
           persist-credentials: false
+      # avtx uses the version in upstream's packaging recipe. avfft needs
+      # the legacy RDFT API, which was removed in newer FFmpeg releases.
+      - name: Check out minimal FFmpeg dependency
+        if: matrix.fft == 'avtx' || matrix.fft == 'avfft'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FFmpeg/FFmpeg
+          ref: ${{ matrix.ffmpeg_ref }}
+          path: ffmpeg
+          persist-credentials: false
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libfftw3-dev
-          dpkg-query -W libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libfftw3-dev
+          sudo apt-get install -y nasm libfftw3-dev
+          dpkg-query -W nasm libfftw3-dev
+      - name: Build minimal FFmpeg dependency
+        if: matrix.fft == 'avtx' || matrix.fft == 'avfft'
+        run: sh candidate/.github/tests/pkgconfig-fft-dependencies/build-ffmpeg.sh
       - name: Select Xcode
         if: runner.os == 'macOS'
         run: |
