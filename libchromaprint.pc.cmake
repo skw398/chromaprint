@@ -7,6 +7,8 @@ Name: @PROJECT_NAME@
 Description: Audio fingerprint library
 URL: http://acoustid.org/chromaprint
 Version: @PROJECT_VERSION@
+Requires.private: @CHROMAPRINT_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lchromaprint
+Libs.private: @CHROMAPRINT_PC_LIBS_PRIVATE@
 Cflags: -I${includedir}
 
